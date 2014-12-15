@@ -12,6 +12,7 @@
 //    11/10/14 cleaned up comments
 //    12/13/14 modified init of TIC_ValueFiltered for smoother startup
 //		12/14/14 removed dead code
+//		12/15/14 added command to set time constant
 
 #include <EEPROM.h>
 #include <Wire.h>
@@ -25,14 +26,14 @@ const char verNo[] = "Rev 12/13/2014";
 // filter constants and variables - note these must be signed to make division work
 //  for negative numerators!
 //  timeConst of 2048 seems good for my OCXO
-const long timeConst = 512;
+long timeConst = 2048;
 // (was 6500) loop gain - VCO DAC counts to make TIC move 1 count/sec
 const long gain = 147;       
 //Damping factor - 100 = 1.0 higher is less overshoot but slower response
 const int damping = 200;     
 const int filterDiv = 4;
-const long filterConst = timeConst/filterDiv;
-const long filterConst2 = ((filterConst*damping)/100)*timeConst;
+long filterConst = timeConst/filterDiv;
+long filterConst2 = ((filterConst*damping)/100)*timeConst;
 const int TIC_Offset = 500;           //nominal ADC value - about half scale
 
 volatile int TIC_Value = TIC_Offset;  // value read from ADC
@@ -443,9 +444,11 @@ void printDataToNewSerial() {
 void getCommand()
 {
   char ch;
+  long timeConstOld;
   enum Command {                      //this is the command set
     h = 'h', H = 'H',                 // hold (followed by a DAC value)
-    r = 'r', R = 'R'                  // run
+    r = 'r', R = 'R',                 // run
+    t = 't', T = 'T'
   }; 
   
   if (Serial.available() > 0) {         //process if something is there
@@ -464,6 +467,17 @@ void getCommand()
         //Serial.println("Run");
         opMode = run;
         break;
+      case t:																// timeconst command
+      case T:				// get new TC and adjust filter variables accordingly
+      	timeConstOld = timeConst;
+      	timeConst = Serial.parseInt();
+      	filterConst = timeConst/filterDiv;
+      	filterConst2 = ((filterConst*damping)/100)* timeConst;
+      	TIC_ValueOld = TIC_ValueOld / timeConstOld * timeConst;
+      	TIC_ValueFiltered = TIC_ValueFiltered / timeConstOld * timeConst;
+  			dacValue = dacValue / timeConstOld * timeConst;
+  			break;
+
       default:
         Serial.println(F("No valid command"));
         break;
@@ -503,7 +517,6 @@ void setup () {
     pinMode(txPin, INPUT);
   
     dacValue = dacValueOut * timeConst;
-    //filterConst = timeConst/filterDiv;
     
     analogReference(INTERNAL);
     delay(100);                          //wait for the reference to settle
