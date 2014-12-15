@@ -136,24 +136,6 @@ ISR (TIMER1_CAPT_vect)
   PPS_ReadFlag = true;         //set the flag so the main loop knows it's time to run
 }
 
-// 1 pps interrupt routine - replaced by input capture above
-/*
-  void pps() {                    
-  timer1CounterValue = TCNT1;  // grab counter value - original
-  timer1CounterValue = ICR1;   // 11/2/14 read ICR instead
-  
-  //disabled 11/1/14 - missed overflow addressed in main loop
-  //if (TIFR1 & TOV1) {          // wrong?? should be (TIFR1 & _BV(TOV1)) or (bitRead(TIFR1, TOV1))
-  //  overflowCount++;
-  //}
-  
-  timerCounts = (overflowCount * 65536) + timer1CounterValue;
-  TIC_Value = analogRead(A0);  // read TIC - maybe move this sooner and/or just kick off the ADC?
-  
-  PPS_ReadFlag = true;      //set the flag
-}
-*/
-
 void calculation() {
 
   timerCountsDiff = timerCounts - timerCountsOld;    // should be close to 5,000,000
