@@ -6,7 +6,7 @@ The design is based on hardware and code originally developed by Lars Walenius a
 
 This should work with any GPS that produces a 1 PPS output. My implementation uses the Adafruit GPS Shield,  which is based on the Globaltop 3339 chip. This is not a specialized timing receiver but its 1 PPS output is specified at a stability of  100 ns RMS. This stability is not difficult to achieve if the antenna has a reasonably unobstructed view of the sky. I was able to fit the phase comparator onto the prototyping space of the GPS Shield card.
 
-My oscillator is a surplus 10MHz OCXO made by FOQ Piezo, which cost $25.00 on eBay. Drift after several days of operation is about 6x10^-11 per day, and considerably better after several weeks of operation. 
+My oscillator is a surplus 10MHz OCXO made by FOQ Piezo, which cost $25.00 on eBay. Drift after several weeks of operation is about 6x10^-11 per day. 
 
 In place of Lars' PWM-based DAC I am using a 12 bit MCP4725, with an I2C interface to the Arduino. 
 
@@ -28,6 +28,8 @@ The monitor software is new and not generally released yet, but is available on 
 
 -- I modified the original code to use the processor's Input Capture Capture register and interrupt for the PPS signal. This reduces both the latency and the uncertainty in the PPS interrupt timing. The PPS signal from the GPS should be connected to Arduino pin D8 and not D2 as in the original design. On the Adafruit GPS Shield, you must cut the trace between the GPS serial TX output and D8 to prevent a conflict. I moved the TX connection to D6.
 
+-- The original code used long integers for the filter variables. This caused some roundoff and truncation errors. Resolved these by converting to float
+
 -- Normally the processor will reset when you connect the USB for computer communication. To prevent this and allow the logging to continue, connect a 4.7 uf 10V capacitor between the Reset pin and Ground. Make sure the + side of the cap goes to the Reset pin.
 
-** Watch this space fo more information, schematics, and code.
+** Watch this space fo more information and schematics.
