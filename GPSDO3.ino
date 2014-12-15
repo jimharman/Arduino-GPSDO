@@ -11,6 +11,7 @@
 //    11/03/14 modified to save and show TIC Avg from 24 hrs ago
 //    11/10/14 cleaned up comments
 //    12/13/14 modified init of TIC_ValueFiltered for smoother startup
+//		12/14/14 removed dead code
 
 #include <EEPROM.h>
 #include <Wire.h>
@@ -200,27 +201,12 @@ void calculation() {
     if(time > 105 && opMode == run) {       // don't recalculate filters for the first 10 secs or if in Hold mode
       
       //LPF on TIC_Value - settles to Value * filterConst
-      //TIC_ValueFiltered = TIC_ValueFiltered + (TIC_Value * filterConst - TIC_ValueFiltered)/filterConst;    //original
-      //new - reduces roundoff error
-      //TIC_ValueFiltered = TIC_ValueFiltered + (TIC_Value * filterConst - TIC_ValueFiltered + filterConst/2)/filterConst;
-      // float version
       TIC_ValueFiltered = TIC_ValueFiltered + (TIC_Value * filterConst - TIC_ValueFiltered)/filterConst;
   
       //remove TIC offset and integrate (corr for time)
-      //dacValue = dacValue + ((TIC_ValueFiltered - TIC_Offset * filterConst) * 100 / filterConst * gain / damping / timeConst);    //original
-  
-      // this version reduces overflow and rounding problems
-      //dacValue = dacValue + ((TIC_ValueFiltered - TIC_Offset * filterConst) * gain + filterConst2/2)/filterConst2;
-      //use this with dacValue as float
       dacValue = dacValue + ((TIC_ValueFiltered - TIC_Offset * filterConst) * gain)/filterConst2;
       
       //corr for frequency??
-      //dacValue = dacValue + ((TIC_ValueFiltered - TIC_ValueOld) * 100 / filterConst * gain / 100);
-      
-      //reduce roundoff problems
-      //dacValue = dacValue +((TIC_ValueFiltered - TIC_ValueOld) * gain + filterConst/2) / filterConst;
- 
-      //use this with float
       dacValue = dacValue +((TIC_ValueFiltered - TIC_ValueOld) * gain) / filterConst;
      }
    else {
@@ -321,8 +307,7 @@ void printDataToSerial()
    
   if (i == 1)
   {
- 
-  Serial.print(F("Five minute averages: TIC+DAC"));
+   Serial.print(F("Five minute averages: TIC+DAC"));
   Serial.print(tab);              // prints a tab
   }
   if (i == 2)
@@ -428,14 +413,7 @@ void printDataToNewSerial() {
 
   // every 5 minutes if the loop is locked add the average TIC value to the histogram
   if (i==0 && PPSlocked==1) {        
- /*
-    if (j==0)
-      itoa(StoreTIC_A[143], buffer1, 10);
-    
-    else 
-      itoa(StoreTIC_A[j-1], buffer1, 10);
- */
-   // note j has already been bumped so we have to back up one
+    // note j has already been bumped so we have to back up one
     itoa(StoreTIC_A[(j+143) % 144], buffer1, 10);
     
     SMprint("#HISTOGRAM", buffer1);
@@ -526,8 +504,6 @@ void setup () {
   
     dacValue = dacValueOut * timeConst;
     //filterConst = timeConst/filterDiv;
-    //TIC_ValueOld = TIC_Offset*filterConst;
-    //TIC_ValueFiltered = TIC_Offset*filterConst;
     
     analogReference(INTERNAL);
     delay(100);                          //wait for the reference to settle
@@ -568,7 +544,6 @@ void setup () {
 void loop () {
   
   if(PPS_ReadFlag) { //wait for pps interrupt
-    //Serial.println("pps detected");
     calculation();
     printDataToSerial();
     getCommand();
