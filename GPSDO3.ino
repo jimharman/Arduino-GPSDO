@@ -13,15 +13,17 @@
 //    12/13/14 modified init of TIC_ValueFiltered for smoother startup
 //		12/14/14 removed dead code
 //		12/15/14 added command to set time constant
+//		12/17/14 added freeRam and adj. sweep rate
 
 #include <EEPROM.h>
 #include <Wire.h>
 #include <Adafruit_MCP4725.h>
+#include "freeram.h"
 
 Adafruit_MCP4725 dac;
 
 const char headline[] = "Arduino GPSDO by Lars Walenius - JH version";
-const char verNo[] = "Rev 12/13/2014";
+const char verNo[] = "Rev 12/17/2014";
 
 // filter constants and variables - note these must be signed to make division work
 //  for negative numerators!
@@ -70,6 +72,10 @@ boolean PPSlocked = false;
 int i = 0; // counter for 300secs before storing temp and dac readings average
 int j = 0; // counter for stored 300sec readings
 int k = 0; // counter for stored 3hour readings
+unsigned int sweepRate = 864;      //0.1 interval for PlotSweep
+long plotCycle;
+long lastPlotCycle = 0;
+
 unsigned int StoreTIC_A[144];      //300sec storage
 unsigned int StoreTIC_A_Old[144];  //previous 12 hrs of 5-min averages
 
@@ -218,7 +224,7 @@ void calculation() {
      TIC_ValueOld = TIC_ValueFiltered;                     //keep for next time
      dacValue = constrain(dacValue, 0, 4095*timeConst);    //limit dacValue to valid range
       
-     dacValueOut = (dacValue / timeConst) + 0.5;       //round and convert to integer for output
+     dacValueOut = round(dacValue / timeConst);       //round and convert to integer for output
  
      if (opMode == hold) {
        dacValueOut = holdValue;
@@ -395,17 +401,16 @@ void printDataToNewSerial() {
   char buffer3[10];
   char buffer4[10];
   char output[40];
-  long plotCycle;
-  static long lastPlotCycle = 0;
+  const char alert[] = "#ALERT";
   static boolean lastPPSlocked = false;
   static int oldTIC = TIC_Offset;
   
-//update the plot every 86.4 sec so a 1000 point sweep will be one day
-  plotCycle = time/864;
+//update the plot - default is 86.4 sec so a 1000 point sweep will be one day
+  plotCycle = time/sweepRate;
   if(plotCycle > lastPlotCycle) {
     itoa(TIC_Value, buffer1, 10);                                         // convert TIC_Value to string
     itoa((TIC_ValueFiltered + filterConst/2)/filterConst, buffer2, 10);   // normalize and convert TIC_ValueFiltered
-    itoa(dacValueOut % 200 + 400, buffer3, 10);                             // convert DACValueOut and autorange 400->600 for display
+    itoa(dacValueOut % 400 + 300, buffer3, 10);                             // convert DACValueOut and autorange 400->600 for display
     itoa(StoreTIC_A_Old[j]/10 - 100, buffer4, 10);                        //get yesterday's TIC value and move it down
     sprintf(output, "%s~%s~%s~%s", buffer1, buffer2, buffer3, buffer4);   //generate the sweep
     SMprint("#PLOTSWEEP", output);
@@ -424,19 +429,19 @@ void printDataToNewSerial() {
     ltoa(timerCountsDiff, buffer1, 10);
     ltoa(time, buffer2, 10);
     sprintf(output, "%s~Time jump at %s", buffer1, buffer2);
-    SMprint("#ALERT", output);
+    SMprint(alert, output);
   }
   
   if (time > 105 && abs(oldTIC - TIC_Value) > 75) {    // alert if a big jump in TICValue
     itoa(oldTIC - TIC_Value, buffer1, 10);
     sprintf(output, "%s~%s", buffer1, "TIC jump");
-    SMprint("#ALERT", output);
+    SMprint(alert, output);
   }
   oldTIC = TIC_Value;
    
    if (PPSlocked != lastPPSlocked) {              // alert if Lock is established or lost
-    if (PPSlocked) SMprint("#ALERT", "100~Locked");
-    else SMprint("#ALERT", "100~Lost Lock");
+    if (PPSlocked) SMprint(alert, "100~Locked");
+    else SMprint(alert, "100~Lost Lock");
   lastPPSlocked = PPSlocked;
   }
  }
@@ -448,7 +453,8 @@ void getCommand()
   enum Command {                      //this is the command set
     h = 'h', H = 'H',                 // hold (followed by a DAC value)
     r = 'r', R = 'R',                 // run
-    t = 't', T = 'T'
+    t = 't', T = 'T',
+    s = 's', S = 'S'
   }; 
   
   if (Serial.available() > 0) {         //process if something is there
@@ -471,11 +477,19 @@ void getCommand()
       case T:				// get new TC and adjust filter variables accordingly
       	timeConstOld = timeConst;
       	timeConst = Serial.parseInt();
+      	timeConst = constrain(timeConst, 1, 32767);
       	filterConst = timeConst/filterDiv;
       	filterConst2 = ((filterConst*damping)/100)* timeConst;
       	TIC_ValueOld = TIC_ValueOld / timeConstOld * timeConst;
       	TIC_ValueFiltered = TIC_ValueFiltered / timeConstOld * timeConst;
   			dacValue = dacValue / timeConstOld * timeConst;
+  			break;
+  		case s:
+  		case S:			// get new plot interval
+  			sweepRate = Serial.parseInt();
+  			sweepRate = constrain(sweepRate, 10, 32767);	//can't combine with above??
+  			plotCycle = time/sweepRate;
+  			lastPlotCycle = plotCycle;
   			break;
 
       default:
@@ -494,6 +508,8 @@ void setup () {
     Serial.print(headline);
     Serial.print(' ');
     Serial.println(verNo);
+    Serial.print(F("Free RAM = "));
+    Serial.println(freeRam());
     
     //attachInterrupt(0, pps, RISING);
 
